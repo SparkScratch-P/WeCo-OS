@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Robotic Arm Simulator</title>
+<style>
+body { margin:0; overflow:hidden; background:#0b1220; color:white; font-family:Arial; }
+#ui {
+  position:absolute; top:10px; left:10px;
+  background:rgba(0,0,0,0.7);
+  padding:12px; border-radius:8px;
+  width:260px;
+}
+input { width:100%; }
+.coord-display {
+  background:rgba(31,108,255,0.2);
+  padding:8px;
+  border-radius:4px;
+  margin:10px 0;
+  font-size:13px;
+}
+.coord-input {
+  background:rgba(255,170,0,0.2);
+  padding:8px;
+  border-radius:4px;
+  margin:10px 0;
+}
+.coord-input input[type="number"] {
+  width:60px;
+  margin:0 5px;
+  padding:4px;
+  background:#1a2332;
+  border:1px solid #1f6cff;
+  color:white;
+  border-radius:3px;
+}
+.coord-input button {
+  background:#1f6cff;
+  color:white;
+  border:none;
+  padding:6px 12px;
+  border-radius:4px;
+  cursor:pointer;
+  margin-top:5px;
+}
+.coord-input button:hover {
+  background:#3d7fff;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+  <h3>Joint Angles</h3>
+
+  Base <span id="v0">90°</span>
+  <input id="j0" type="range" min="0" max="180" value="90">
+
+  Shoulder <span id="v1">90°</span>
+  <input id="j1" type="range" min="0" max="180" value="90">
+
+  Elbow <span id="v2">90°</span>
+  <input id="j2" type="range" min="0" max="160" value="90">
+
+  Claw (open/close) <span id="v3">50%</span>
+  <input id="j3" type="range" min="0" max="100" value="50">
+
+  <div class="coord-display">
+    <strong>End-Effector Position (Live)</strong><br>
+    X: <span id="posX">0.00</span><br>
+    Y: <span id="posY">0.00</span><br>
+    Z: <span id="posZ">0.00</span>
+  </div>
+
+  <div class="coord-input">
+    <strong>Move to Coordinates</strong><br>
+    X: <input type="number" id="inputX" step="0.1" value="0">
+    Y: <input type="number" id="inputY" step="0.1" value="5">
+    Z: <input type="number" id="inputZ" step="0.1" value="0"><br>
+    <button onclick="moveToCoordinates()">Move Arm</button>
+  </div>
+</div>
+
+<!-- top-right recording / save / load controls -->
+<div id="controlBar" style="
+  position:absolute;
+  top:10px;
+  right:10px;
+  background:rgba(0,0,0,0.7);
+  padding:10px;
+  border-radius:8px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-size:13px;
+">
+  <button id="recordBtn" style="
+    background:#22c55e;
+    color:white;
+    border:none;
+    padding:6px 12px;
+    border-radius:4px;
+    cursor:pointer;
+  ">Record</button>
+
+  <button id="saveBtn" style="
+    background:#1f6cff;
+    color:white;
+    border:none;
+    padding:6px 10px;
+    border-radius:4px;
+    cursor:pointer;
+  ">Save</button>
+
+  <label style="cursor:pointer; background:#334155; padding:6px 10px; border-radius:4px;">
+    Load
+    <input id="loadInput" type="file" accept=".arm,.txt" style="display:none;">
+  </label>
+
+    <div id="blynkStatus" style="
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-left:8px;
+    padding:4px 8px;
+    background:rgba(15,23,42,0.9);
+    border-radius:999px;
+    font-size:12px;
+  ">
+    <span id="blynkDot" style="
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#64748b; /* default: grey (unknown) */
+      box-shadow:0 0 6px rgba(15,118,110,0.0);
+      display:inline-block;
+    "></span>
+    <span id="blynkText">Checking…</span>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
+
+<script>
+
+// ========================================
+// BLYNK CONFIGURATION
+// ========================================
+const BLYNK_AUTH_TOKEN = "sR5ovizT06Xl6m2ni63YQu45PCaV8-tL"; // your device token
+const BLYNK_SERVER     = "https://blynk.cloud";
+const BLYNK_UPDATE_INTERVAL      = 500;   // send angles every 500 ms
+const BLYNK_STATUS_CHECK_INTERVAL = 3000; // check online status every 3 s
+
+let blynkUpdateTimer  = null;
+let blynkStatusTimer  = null;
+
+// angle update (as before)
+function updateBlynkVirtualPins() {
+  const baseAngle     = Math.round(state.base);
+  const shoulderAngle = Math.round(state.shoulder);
+  const elbowAngle    = Math.round(state.elbow);
+  const clawValue     = Math.round(state.claw);
+
+  const url =
+    `${BLYNK_SERVER}/external/api/batch/update` +
+    `?token=${BLYNK_AUTH_TOKEN}` +
+    `&V1=${baseAngle}` +
+    `&V2=${shoulderAngle}` +
+    `&V3=${elbowAngle}` +
+    `&V4=${clawValue}`;
+
+  fetch(url).catch(err => console.error("Blynk update failed:", err));
+}
+
+function startBlynkUpdatesForever() {
+  if (blynkUpdateTimer) clearInterval(blynkUpdateTimer);
+  blynkUpdateTimer = setInterval(updateBlynkVirtualPins, BLYNK_UPDATE_INTERVAL);
+}
+
+// ========================================
+// BLYNK ONLINE STATUS INDICATOR
+// ========================================
+// uses: GET /external/api/isHardwareConnected?token=... (returns "true"/"false")[web:15]
+function updateBlynkConnectionStatus() {
+  const dotEl  = document.getElementById("blynkDot");
+  const textEl = document.getElementById("blynkText");
+  if (!dotEl || !textEl) return;
+
+  const url = `${BLYNK_SERVER}/external/api/isHardwareConnected?token=${BLYNK_AUTH_TOKEN}`;
+
+  fetch(url)
+    .then(res => res.text())
+    .then(txt => {
+      const online = (txt.trim().toLowerCase() === "true");
+      if (online) {
+        dotEl.style.background = "#22c55e"; // greenish-blue
+        dotEl.style.boxShadow  = "0 0 8px rgba(56,189,248,0.9)";
+        textEl.textContent     = "Connected";
+      } else {
+        dotEl.style.background = "#64748b"; // grey
+        dotEl.style.boxShadow  = "none";
+        textEl.textContent     = "Offline";
+      }
+    })
+    .catch(err => {
+      console.error("Blynk status check failed:", err);
+      dotEl.style.background = "#f97316"; // orange error
+      dotEl.style.boxShadow  = "none";
+      textEl.textContent     = "Error";
+    });
+}
+
+function startBlynkStatusCheck() {
+  if (blynkStatusTimer) clearInterval(blynkStatusTimer);
+  updateBlynkConnectionStatus(); // initial
+  blynkStatusTimer = setInterval(updateBlynkConnectionStatus, BLYNK_STATUS_CHECK_INTERVAL);
+}
+
+
+// -------- SCENE --------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101820);
+
+// -------- CAMERA --------
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(10,10,15);
+camera.lookAt(0,4,0);
+
+// -------- RENDERER --------
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// -------- LIGHTS --------
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
+
+// -------- HELPERS --------
+scene.add(new THREE.GridHelper(20,20));
+scene.add(new THREE.AxesHelper(5));
+
+// -------- MATERIAL --------
+const mat = new THREE.MeshStandardMaterial({color:0x1f6cff});
+
+// -------- ROBOT ARM --------
+const base = new THREE.Group();
+scene.add(base);
+
+const baseMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(2,2,1.5,32), mat
+);
+base.add(baseMesh);
+
+// shoulder
+const shoulder = new THREE.Group();
+shoulder.position.set(0.0, 1, 0); 
+base.add(shoulder);
+
+const sMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5,5,1.5), mat
+);
+sMesh.position.y = 2.5;
+shoulder.add(sMesh);
+
+// elbow
+const elbow = new THREE.Group();
+elbow.position.y = 5;
+shoulder.add(elbow);
+
+const eMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2,5,1.2), mat
+);
+eMesh.position.y = 2.5;
+elbow.add(eMesh);
+
+// wrist base (no main rotation now)
+const wrist = new THREE.Group();
+wrist.position.y = 5;
+elbow.add(wrist);
+
+const wBaseMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1,1,1), mat
+);
+wBaseMesh.position.y = 0.5;
+wrist.add(wBaseMesh);
+
+// -------- CLAW --------
+const clawGroup = new THREE.Group();
+clawGroup.position.y = 1;
+clawGroup.rotation.y = Math.PI / 2;
+wrist.add(clawGroup);
+
+const fingerMat = new THREE.MeshStandardMaterial({color:0xffaa00});
+const fingerBaseGeom = new THREE.BoxGeometry(0.2, 0.9, 0.3);
+const fingerTipGeom  = new THREE.BoxGeometry(0.18, 0.6, 0.28);
+
+// left finger
+const leftFingerPivot = new THREE.Group();
+leftFingerPivot.position.set(-0.3,0,0);
+clawGroup.add(leftFingerPivot);
+
+const leftFingerGroup = new THREE.Group();
+leftFingerGroup.position.y = 0;
+leftFingerPivot.add(leftFingerGroup);
+
+const leftFingerBase = new THREE.Mesh(fingerBaseGeom, fingerMat);
+leftFingerBase.position.y = 0.45;
+leftFingerGroup.add(leftFingerBase);
+
+const leftFingerTip = new THREE.Mesh(fingerTipGeom, fingerMat);
+leftFingerTip.position.set(0, 0.9, 0);
+leftFingerTip.rotation.z = -Math.PI / 6;
+leftFingerGroup.add(leftFingerTip);
+
+// right finger
+const rightFingerPivot = new THREE.Group();
+rightFingerPivot.position.set(0.3,0,0);
+clawGroup.add(rightFingerPivot);
+
+const rightFingerGroup = new THREE.Group();
+rightFingerGroup.position.y = 0;
+rightFingerPivot.add(rightFingerGroup);
+
+const rightFingerBase = new THREE.Mesh(fingerBaseGeom, fingerMat);
+rightFingerBase.position.y = 0.45;
+rightFingerGroup.add(rightFingerBase);
+
+const rightFingerTip = new THREE.Mesh(fingerTipGeom, fingerMat);
+rightFingerTip.position.set(0, 0.9, 0);
+rightFingerTip.rotation.z = Math.PI / 6;
+rightFingerGroup.add(rightFingerTip);
+
+// -------- END-EFFECTOR MARKER --------
+const endEffectorMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.2, 16, 16),
+  new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.5})
+);
+clawGroup.add(endEffectorMarker);
+
+// -------- UI --------
+const sliders = [j0,j1,j2,j3];
+const labels = [v0,v1,v2,v3];
+const d2r = d => d*Math.PI/180;
+
+// --- joint state (degrees) ---
+const state = {
+  base: 90,
+  shoulder: 90,
+  elbow: 90,
+  claw: 50
+};
+// start continuous Blynk tasks
+startBlynkUpdatesForever();   // send angles V1–V4 forever
+startBlynkStatusCheck();      // update “Connected” indicator forever
+
+// -------- RECORDING / PLAYBACK STATE --------
+let recordState = "idle"; // "idle" | "recording" | "playing"
+let recordData = [];      // {t, base, shoulder, elbow, claw}
+let recordTimer = null;   // sampling timer
+let playTimer = null;     // playback timer
+let recordStartTime = 0;  // ms
+let recordTotalTime = 0;  // ms
+let playStartTime = 0;    // ms
+let playElapsed = 0;      // ms accumulated when paused
+
+const SAMPLE_PERIOD = 500;
+
+// helper to apply state to 3D
+function applyState() {
+  base.rotation.y = d2r(state.base);
+  shoulder.rotation.z = d2r(state.shoulder - 90);
+  elbow.rotation.z = d2r(state.elbow);
+
+  const maxSpread = 35;
+  const t = state.claw / 100;
+  const angle = maxSpread * t;
+  leftFingerPivot.rotation.z = d2r(+angle);
+  rightFingerPivot.rotation.z = d2r(-angle);
+}
+
+// Get end-effector world position
+function getEndEffectorPosition() {
+  const worldPos = new THREE.Vector3();
+  endEffectorMarker.getWorldPosition(worldPos);
+  return worldPos;
+}
+
+// Update position display
+function updatePositionDisplay() {
+  const pos = getEndEffectorPosition();
+  posX.textContent = pos.x.toFixed(2);
+  posY.textContent = pos.y.toFixed(2);
+  posZ.textContent = pos.z.toFixed(2);
+}
+
+// updates labels, sliders, and 3D from state
+function syncUIAndScene() {
+  sliders[0].value = state.base;
+  sliders[1].value = state.shoulder;
+  sliders[2].value = state.elbow;
+  sliders[3].value = state.claw;
+
+  labels[0].innerText = state.base + "°";
+  labels[1].innerText = state.shoulder + "°";
+  labels[2].innerText = state.elbow + "°";
+  labels[3].innerText = state.claw + "%";
+
+  applyState();
+  updatePositionDisplay();
+}
+
+syncUIAndScene();
+
+// this is only used when we *really* want to kill automation
+function stopAllAutomation() {
+  if (recordTimer) { clearInterval(recordTimer); recordTimer = null; }
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  recordState = "idle";
+  playElapsed = 0;
+  setRecordButton("Record", "#22c55e");
+}
+
+// slider events – do NOT stop recording
+sliders[0].oninput = () => {
+  state.base = Number(sliders[0].value);
+  syncUIAndScene();
+};
+sliders[1].oninput = () => {
+  state.shoulder = Number(sliders[1].value);
+  syncUIAndScene();
+};
+sliders[2].oninput = () => {
+  state.elbow = Math.min(160, Number(sliders[2].value));
+  syncUIAndScene();
+};
+sliders[3].oninput = () => {
+  state.claw = Number(sliders[3].value);
+  syncUIAndScene();
+};
+
+// -------- ARM GEOMETRY CONSTANTS --------
+const ARM_GEOMETRY = {
+  shoulderHeight: 1,
+  link1Length: 5,
+  link2Length: 6,
+  get totalReach() { return this.link1Length + this.link2Length; }
+};
+
+// -------- FORWARD KINEMATICS --------
+function forwardKinematics(baseAngle, shoulderAngle, elbowAngle) {
+  const d2rLoc = (deg) => deg * Math.PI / 180;
+  const shoulderRad = d2rLoc(shoulderAngle - 90);
+  const elbowRad = d2rLoc(elbowAngle);
+
+  const x1 = ARM_GEOMETRY.link1Length * Math.cos(shoulderRad);
+  const y1 = ARM_GEOMETRY.link1Length * Math.sin(shoulderRad);
+
+  const totalAngle = shoulderRad + elbowRad;
+  const x2 = x1 + ARM_GEOMETRY.link2Length * Math.cos(totalAngle);
+  const y2 = y1 + ARM_GEOMETRY.link2Length * Math.sin(totalAngle);
+
+  const baseRad = d2rLoc(baseAngle);
+  const x = x2 * Math.sin(baseRad);
+  const z = x2 * Math.cos(baseRad);
+  const y = y2 + ARM_GEOMETRY.shoulderHeight;
+
+  return { x, y, z };
+}
+
+// -------- WORKSPACE LIMITS --------
+const workspaceLimits = {
+  get maxReach() { return ARM_GEOMETRY.totalReach; },
+  minReach: 0.5,
+  get maxHeight() { return ARM_GEOMETRY.shoulderHeight + ARM_GEOMETRY.totalReach; },
+  get minHeight() { return ARM_GEOMETRY.shoulderHeight - ARM_GEOMETRY.totalReach; }
+};
+
+function isInWorkspace(x, y, z) {
+  const horizDist = Math.sqrt(x*x + z*z);
+  const yAdjusted = y - ARM_GEOMETRY.shoulderHeight;
+  const dist = Math.sqrt(horizDist*horizDist + yAdjusted*yAdjusted);
+  return dist <= workspaceLimits.maxReach + 0.1 && 
+         dist >= workspaceLimits.minReach &&
+         y <= workspaceLimits.maxHeight + 0.1 &&
+         y >= workspaceLimits.minHeight - 0.1;
+}
+
+// -------- INVERSE KINEMATICS --------
+function inverseKinematics(targetX, targetY, targetZ) {
+  const dist = Math.sqrt(targetX*targetX + (targetY-1)*(targetY-1) + targetZ*targetZ);
+  if (dist > 11.5 || dist < 0.5) {
+    alert(`Target outside workspace! Distance from shoulder: ${dist.toFixed(2)}`);
+    return null;
+  }
+
+  let bestBase = state.base;
+  let bestShoulder = state.shoulder;
+  let bestElbow = state.elbow;
+
+  function getError(base, shoulder, elbow) {
+    const oldState = {base: state.base, shoulder: state.shoulder, elbow: state.elbow};
+    state.base = base;
+    state.shoulder = shoulder;
+    state.elbow = elbow;
+    applyState();
+
+    const pos = getEndEffectorPosition();
+
+    state.base = oldState.base;
+    state.shoulder = oldState.shoulder;
+    state.elbow = oldState.elbow;
+    applyState();
+
+    return {
+      error: Math.sqrt(
+        Math.pow(pos.x - targetX, 2) +
+        Math.pow(pos.y - targetY, 2) +
+        Math.pow(pos.z - targetZ, 2)
+      ),
+      pos: pos
+    };
+  }
+
+  let improved = true;
+  let iteration = 0;
+  const maxIterations = 200;
+
+  while (improved && iteration < maxIterations) {
+    improved = false;
+    iteration++;
+
+    const currentError = getError(bestBase, bestShoulder, bestElbow).error;
+    if (currentError < 0.1) break;
+
+    const joints = [
+      {name: 'base', value: bestBase, min: 0, max: 180, step: 2},
+      {name: 'shoulder', value: bestShoulder, min: 0, max: 180, step: 2},
+      {name: 'elbow', value: bestElbow, min: 0, max: 160, step: 2}
+    ];
+
+    for (let joint of joints) {
+      let best = joint.value;
+      let bestErr = currentError;
+
+      for (let delta of [-joint.step, joint.step]) {
+        const newVal = THREE.MathUtils.clamp(joint.value + delta, joint.min, joint.max);
+
+        let testBase = bestBase;
+        let testShoulder = bestShoulder;
+        let testElbow = bestElbow;
+
+        if (joint.name === 'base') testBase = newVal;
+        else if (joint.name === 'shoulder') testShoulder = newVal;
+        else testElbow = newVal;
+
+        const result = getError(testBase, testShoulder, testElbow);
+
+        if (result.error < bestErr) {
+          bestErr = result.error;
+          best = newVal;
+          improved = true;
+        }
+      }
+
+      if (joint.name === 'base') bestBase = best;
+      else if (joint.name === 'shoulder') bestShoulder = best;
+      else bestElbow = best;
+    }
+
+    if (iteration % 20 === 0) {
+      for (let joint of joints) {
+        joint.step = Math.max(0.5, joint.step * 0.7);
+      }
+    }
+  }
+
+  return {
+    base: bestBase,
+    shoulder: bestShoulder,
+    elbow: bestElbow
+  };
+}
+
+// Move to coordinates function
+function moveToCoordinates() {
+  const targetX = parseFloat(inputX.value);
+  const targetY = parseFloat(inputY.value);
+  const targetZ = parseFloat(inputZ.value);
+
+  if (isNaN(targetX) || isNaN(targetY) || isNaN(targetZ)) {
+    alert("Please enter valid numbers for all coordinates!");
+    return;
+  }
+
+  stopAllAutomation(); // here we do want to cancel record/play
+
+  const result = inverseKinematics(targetX, targetY, targetZ);
+
+  if (result) {
+    state.base = result.base;
+    state.shoulder = result.shoulder;
+    state.elbow = result.elbow;
+    syncUIAndScene();
+  }
+}
+
+// -------- RECORD / SAVE / LOAD UI HOOKUP --------
+const recordBtn = document.getElementById("recordBtn");
+const saveBtn   = document.getElementById("saveBtn");
+const loadInput = document.getElementById("loadInput");
+
+recordBtn.addEventListener("click", () => {
+  if (recordState === "idle") {
+    if (recordBtn.textContent === "Record") {
+      startRecording();
+    } else if (recordBtn.textContent === "Play") {
+      startPlaybackLoop();
+    } else {
+      startRecording();
+    }
+  } else if (recordState === "recording") {
+    stopRecordingAndEnablePlay();
+  } else if (recordState === "playing") {
+    pausePlayback();
+  }
+});
+
+// save
+saveBtn.addEventListener("click", () => {
+  if (!recordData || recordData.length === 0) {
+    alert("No recording to save. Please record something first.");
+    return;
+  }
+  saveRecordingToFile();
+});
+
+// load
+loadInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  loadRecordingFromFile(file);
+  e.target.value = "";
+});
+
+// -------- RECORDING / PLAYBACK FUNCTIONS --------
+function setRecordButton(label, bgColor) {
+  recordBtn.textContent = label;
+  recordBtn.style.background = bgColor;
+}
+
+function startRecording() {
+  stopPlaybackInternal();
+
+  recordState = "recording";
+  recordData = [];
+  recordStartTime = performance.now();
+  recordTotalTime = 0;
+  playElapsed = 0;
+
+  // first sample at t = 0
+  sampleCurrentState(0);
+  setRecordButton("Stop", "#ef4444");
+
+  if (recordTimer) clearInterval(recordTimer);
+  recordTimer = setInterval(() => {
+    const t = performance.now() - recordStartTime;
+    sampleCurrentState(t);
+  }, SAMPLE_PERIOD);
+}
+
+function sampleCurrentState(tMs) {
+  recordData.push({
+    t: tMs,
+    base: state.base,
+    shoulder: state.shoulder,
+    elbow: state.elbow,
+    claw: state.claw
+  });
+}
+
+function stopRecordingAndEnablePlay() {
+  if (recordTimer) {
+    clearInterval(recordTimer);
+    recordTimer = null;
+  }
+  if (recordData.length === 0) {
+    recordState = "idle";
+    setRecordButton("Record", "#22c55e");
+    return;
+  }
+
+  const last = recordData[recordData.length - 1];
+  recordTotalTime = last.t;
+  recordState = "idle";
+  playElapsed = 0;
+  setRecordButton("Play", "#1f6cff");
+}
+
+function startPlaybackLoop() {
+  if (!recordData || recordData.length === 0) {
+    alert("No recording to play.");
+    return;
+  }
+
+  recordData.sort((a, b) => a.t - b.t);
+  recordTotalTime = recordData[recordData.length - 1].t || 0;
+
+  if (recordTotalTime <= 0) {
+    alert("Recording is too short.");
+    return;
+  }
+
+  recordState = "playing";
+  setRecordButton("Pause", "#f97316");
+
+  // continue from where we left off (playElapsed), loop when exceeding total time
+  playStartTime = performance.now() - playElapsed;
+
+  if (playTimer) clearInterval(playTimer);
+
+  playTimer = setInterval(() => {
+    const now = performance.now();
+    const elapsed = (now - playStartTime) % recordTotalTime;
+    playElapsed = elapsed;
+
+    // find keyframes around current time
+    let i = 0;
+    while (i < recordData.length - 1 && recordData[i + 1].t < elapsed) {
+      i++;
+    }
+
+    const k1 = recordData[i];
+    const k2 = recordData[Math.min(i + 1, recordData.length - 1)];
+    const span = Math.max(1, k2.t - k1.t);
+    const t = THREE.MathUtils.clamp((elapsed - k1.t) / span, 0, 1);
+
+    state.base     = k1.base     + (k2.base     - k1.base)     * t;
+    state.shoulder = k1.shoulder + (k2.shoulder - k1.shoulder) * t;
+    state.elbow    = k1.elbow    + (k2.elbow    - k1.elbow)    * t;
+    state.claw     = k1.claw     + (k2.claw     - k1.claw)     * t;
+
+    syncUIAndScene();
+  }, 30);
+}
+
+function pausePlayback() {
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+  }
+  recordState = "idle";
+  setRecordButton("Play", "#1f6cff");
+}
+
+function stopPlaybackInternal() {
+  if (playTimer) {
+    clearInterval(playTimer);
+    playTimer = null;
+  }
+  playElapsed = 0;
+}
+
+// -------- SAVE / LOAD FUNCTIONS --------
+function saveRecordingToFile() {
+  const payload = {
+    meta: {
+      type: "robotArmRecording",
+      version: 1,
+      samplePeriodMs: SAMPLE_PERIOD
+    },
+    data: recordData
+  };
+
+  const text = JSON.stringify(payload, null, 2);
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "record.arm";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function loadRecordingFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const payload = JSON.parse(text);
+
+      if (!payload || payload.meta?.type !== "robotArmRecording" || !Array.isArray(payload.data)) {
+        alert("Invalid .arm file format.");
+        return;
+      }
+
+      stopAllAutomation();
+
+      recordData = payload.data.map((k) => ({
+        t: Number(k.t) || 0,
+        base: Number(k.base) || 0,
+        shoulder: Number(k.shoulder) || 0,
+        elbow: Number(k.elbow) || 0,
+        claw: Number(k.claw) || 0
+      }));
+
+      if (recordData.length === 0) {
+        alert("Loaded recording is empty.");
+        return;
+      }
+
+      recordData.sort((a, b) => a.t - b.t);
+      recordTotalTime = recordData[recordData.length - 1].t || 0;
+      recordState = "idle";
+      playElapsed = 0;
+      setRecordButton("Play", "#1f6cff");
+
+      const k0 = recordData[0];
+      state.base = k0.base;
+      state.shoulder = k0.shoulder;
+      state.elbow = k0.elbow;
+      state.claw = k0.claw;
+      syncUIAndScene();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load recording.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+// -------- INTERACTIVE CLICK & DRAG ROTATION --------
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+let dragging = false;
+let dragTarget = null;
+let dragStartY = 0;
+let dragStartX = 0;
+let dragStartValue = 0;
+
+const pickables = [];
+pickables.push({mesh: baseMesh, type: "base"});
+pickables.push({mesh: sMesh, type: "shoulder"});
+pickables.push({mesh: eMesh, type: "elbow"});
+pickables.push({mesh: wBaseMesh, type: "claw"});
+pickables.push({mesh: leftFingerBase, type: "claw"});
+pickables.push({mesh: rightFingerBase, type: "claw"});
+
+function onPointerDown(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const x = ( (event.clientX - rect.left) / rect.width ) * 2 - 1;
+  const y = - ( (event.clientY - rect.top) / rect.height ) * 2 + 1;
+
+  mouse.set(x, y);
+  raycaster.setFromCamera(mouse, camera);
+
+  const objects = pickables.map(p => p.mesh);
+  const intersects = raycaster.intersectObjects(objects, false);
+  if (intersects.length > 0) {
+    const hitMesh = intersects[0].object;
+    const info = pickables.find(p => p.mesh === hitMesh);
+    if (info) {
+      dragging = true;
+      dragTarget = info.type;
+      dragStartY = event.clientY;
+      dragStartX = event.clientX;
+      if (dragTarget === "base") dragStartValue = state.base;
+      else if (dragTarget === "shoulder") dragStartValue = state.shoulder;
+      else if (dragTarget === "elbow") dragStartValue = state.elbow;
+      else if (dragTarget === "claw") dragStartValue = state.claw;
+    }
+  }
+}
+
+function onPointerMove(event) {
+  if (!dragging || !dragTarget) return;
+
+  const deltaY = event.clientY - dragStartY;
+  const deltaX = event.clientX - dragStartX;
+
+  const factorBase  = 0.3;
+  const factorJoint = 0.35;
+
+  if (dragTarget === "base") {
+    const delta = deltaX * factorBase;
+    state.base = THREE.MathUtils.clamp(dragStartValue + delta, 0, 180);
+
+  } else if (dragTarget === "shoulder") {
+    const delta = -deltaY * factorJoint;
+    state.shoulder = THREE.MathUtils.clamp(dragStartValue + delta, 0, 180);
+
+  } else if (dragTarget === "elbow") {
+    const delta = (+deltaY) * factorJoint;
+    state.elbow = THREE.MathUtils.clamp(dragStartValue + delta, 0, 160);
+
+  } else if (dragTarget === "claw") {
+    const delta = -deltaY * factorJoint;
+    state.claw = THREE.MathUtils.clamp(dragStartValue + delta, 0, 100);
+  }
+
+  syncUIAndScene();
+}
+
+function onPointerUp() {
+  dragging = false;
+  dragTarget = null;
+}
+
+renderer.domElement.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointerleave', onPointerUp);
+
+// -------- LOOP --------
+function animate(){
+  requestAnimationFrame(animate);
+  renderer.render(scene,camera);
+}
+animate();
+
+// -------- RESIZE --------
+onresize=()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+};
+</script>
+
+</body>
+</html>
