@@ -1,937 +1,1258 @@
+
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Robotic Arm Simulator</title>
+<title>5-DOF Robotic Arm Simulator v7</title>
 <style>
-body { margin:0; overflow:hidden; background:#0b1220; color:white; font-family:Arial; }
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg:        #080d14;
+  --panel:     rgba(8,16,28,0.92);
+  --border:    rgba(30,120,255,0.25);
+  --accent:    #1e78ff;
+  --accent2:   #00e5ff;
+  --warn:      #ffaa00;
+  --ok:        #22c55e;
+  --err:       #f97316;
+  --text:      #c8d8f0;
+  --mono:      'Share Tech Mono', monospace;
+  --sans:      'Exo 2', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+/* ── PANELS ─────────────────────────────────── */
+.panel {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  padding: 14px;
+}
+
+/* LEFT — joint controls */
 #ui {
-  position:absolute; top:10px; left:10px;
-  background:rgba(0,0,0,0.7);
-  padding:12px; border-radius:8px;
-  width:260px;
+  top: 10px; left: 10px;
+  width: 270px;
 }
-input { width:100%; }
+
+#ui h3 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent2);
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.joint-row {
+  margin-bottom: 10px;
+}
+
+.joint-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+
+.joint-name {
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.joint-val {
+  font-family: var(--mono);
+  color: var(--accent2);
+  font-size: 12px;
+  min-width: 48px;
+  text-align: right;
+}
+
+.joint-limits {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: rgba(100,140,200,0.5);
+}
+
+input[type=range] {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(30,120,255,0.2);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  cursor: pointer;
+}
+
+/* coord display */
 .coord-display {
-  background:rgba(31,108,255,0.2);
-  padding:8px;
-  border-radius:4px;
-  margin:10px 0;
-  font-size:13px;
+  background: rgba(30,120,255,0.08);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 10px 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
 }
-.coord-input {
-  background:rgba(255,170,0,0.2);
-  padding:8px;
-  border-radius:4px;
-  margin:10px 0;
+
+.coord-display strong {
+  display: block;
+  color: var(--accent2);
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
 }
-.coord-input input[type="number"] {
-  width:60px;
-  margin:0 5px;
-  padding:4px;
-  background:#1a2332;
-  border:1px solid #1f6cff;
-  color:white;
-  border-radius:3px;
+
+/* IK input */
+.ik-box {
+  background: rgba(255,170,0,0.06);
+  border: 1px solid rgba(255,170,0,0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 10px;
 }
-.coord-input button {
-  background:#1f6cff;
-  color:white;
-  border:none;
-  padding:6px 12px;
-  border-radius:4px;
-  cursor:pointer;
-  margin-top:5px;
+
+.ik-box strong {
+  display: block;
+  color: var(--warn);
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
 }
-.coord-input button:hover {
-  background:#3d7fff;
+
+.ik-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.ik-row label { font-size: 11px; color: var(--text); width: 14px; }
+.ik-row input[type=number] {
+  flex: 1;
+  padding: 4px 6px;
+  background: rgba(20,30,50,0.9);
+  border: 1px solid rgba(30,120,255,0.35);
+  border-radius: 4px;
+  color: white;
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.btn {
+  width: 100%;
+  padding: 7px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1px;
+  transition: filter 0.15s, transform 0.1s;
+}
+.btn:hover { filter: brightness(1.25); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-blue { background: var(--accent); color: white; }
+.btn-green { background: var(--ok); color: white; }
+.btn-orange { background: var(--warn); color: #000; }
+.btn-red { background: #ef4444; color: white; }
+.btn-indigo { background: #6366f1; color: white; }
+
+/* trajectory indicator */
+#trajBar {
+  display: none;
+  width: 100%;
+  height: 3px;
+  background: rgba(30,120,255,0.15);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+#trajFill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px;
+  transition: width 0.03s linear;
+}
+
+/* RIGHT — control bar */
+#controlBar {
+  top: 10px; right: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+#controlBar button {
+  padding: 6px 13px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  color: white;
+  transition: filter 0.15s;
+}
+#controlBar button:hover { filter: brightness(1.2); }
+
+/* blynk status pill */
+#blynkStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(10,18,34,0.9);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+#blynkDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  display: inline-block;
+  transition: background 0.4s, box-shadow 0.4s;
+}
+
+/* BOTTOM — trajectory info */
+#trajPanel {
+  bottom: 10px; left: 50%; transform: translateX(-50%);
+  padding: 8px 16px;
+  display: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  gap: 20px;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* HZ counter */
+#hzDisplay {
+  position: absolute;
+  bottom: 10px; right: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(100,140,200,0.4);
+}
+
+/* scan line overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 999;
 }
 </style>
 </head>
-
 <body>
 
-<div id="ui">
-  <h3>Joint Angles</h3>
+<!-- LEFT PANEL -->
+<div id="ui" class="panel">
+  <h3>◈ 5-DOF JOINT CONTROL</h3>
 
-  Base <span id="v0">90°</span>
-  <input id="j0" type="range" min="0" max="180" value="90">
+  <div class="joint-row">
+    <div class="joint-label">
+      <span class="joint-name">Base (Yaw)</span>
+      <span class="joint-limits">0° – 270°</span>
+      <span class="joint-val" id="v0">211.9°</span>
+    </div>
+    <input id="j0" type="range" min="0" max="270" value="211.9">
+  </div>
 
-  Shoulder <span id="v1">90°</span>
-  <input id="j1" type="range" min="0" max="180" value="90">
+  <div class="joint-row">
+    <div class="joint-label">
+      <span class="joint-name">Shoulder</span>
+      <span class="joint-limits">0° – 270°</span>
+      <span class="joint-val" id="v1">177.4°</span>
+    </div>
+    <input id="j1" type="range" min="0" max="270" value="177.4">
+  </div>
 
-  Elbow <span id="v2">90°</span>
-  <input id="j2" type="range" min="0" max="160" value="90">
+  <div class="joint-row">
+    <div class="joint-label">
+      <span class="joint-name">Elbow</span>
+      <span class="joint-limits">0° – 270°</span>
+      <span class="joint-val" id="v2">224.3°</span>
+    </div>
+    <input id="j2" type="range" min="0" max="270" value="224.3">
+  </div>
 
-  Claw (open/close) <span id="v3">50%</span>
-  <input id="j3" type="range" min="0" max="100" value="50">
+  <div class="joint-row">
+    <div class="joint-label">
+      <span class="joint-name">Wrist Pitch</span>
+      <span class="joint-limits">0° – 180°</span>
+      <span class="joint-val" id="v4">141.4°</span>
+    </div>
+    <input id="j4" type="range" min="0" max="180" value="141.4">
+  </div>
+
+  <div class="joint-row">
+    <div class="joint-label">
+      <span class="joint-name">Claw Grip</span>
+      <span class="joint-limits">0% – 100%</span>
+      <span class="joint-val" id="v3">100%</span>
+    </div>
+    <input id="j3" type="range" min="0" max="100" value="100">
+  </div>
 
   <div class="coord-display">
-    <strong>End-Effector Position (Live)</strong><br>
-    X: <span id="posX">0.00</span><br>
-    Y: <span id="posY">0.00</span><br>
+    <strong>▸ END-EFFECTOR POSITION</strong>
+    X: <span id="posX">0.00</span> &nbsp;
+    Y: <span id="posY">0.00</span> &nbsp;
     Z: <span id="posZ">0.00</span>
   </div>
 
-  <div class="coord-input">
-    <strong>Move to Coordinates</strong><br>
-    X: <input type="number" id="inputX" step="0.1" value="0">
-    Y: <input type="number" id="inputY" step="0.1" value="5">
-    Z: <input type="number" id="inputZ" step="0.1" value="0"><br>
-    <button onclick="moveToCoordinates()">Move Arm</button>
+  <div class="ik-box">
+    <strong>◈ INVERSE KINEMATICS TARGET</strong>
+    <div class="ik-row">
+      <label>X</label><input type="number" id="inputX" step="0.1" value="0">
+    </div>
+    <div class="ik-row">
+      <label>Y</label><input type="number" id="inputY" step="0.1" value="6">
+    </div>
+    <div class="ik-row">
+      <label>Z</label><input type="number" id="inputZ" step="0.1" value="5">
+    </div>
+    <button class="btn btn-blue" onclick="startIKMove()">▶ Execute Trajectory</button>
+    <button class="btn btn-red" id="abortBtn" onclick="abortTrajectory()" style="display:none; margin-top:4px;">■ Abort</button>
+    <div id="trajBar"><div id="trajFill"></div></div>
+    <div id="trajStatus" style="font-family:var(--mono); font-size:10px; color:var(--accent2); margin-top:4px; min-height:14px;"></div>
   </div>
 </div>
 
-<!-- top-right recording / save / load controls -->
-<div id="controlBar" style="
-  position:absolute;
-  top:10px;
-  right:10px;
-  background:rgba(0,0,0,0.7);
-  padding:10px;
-  border-radius:8px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  font-size:13px;
-">
-  <button id="recordBtn" style="
-    background:#22c55e;
-    color:white;
-    border:none;
-    padding:6px 12px;
-    border-radius:4px;
-    cursor:pointer;
-  ">Record</button>
-
-  <button id="saveBtn" style="
-    background:#1f6cff;
-    color:white;
-    border:none;
-    padding:6px 10px;
-    border-radius:4px;
-    cursor:pointer;
-  ">Save</button>
-
-  <label style="cursor:pointer; background:#334155; padding:6px 10px; border-radius:4px;">
-    Load
-    <input id="loadInput" type="file" accept=".arm,.txt" style="display:none;">
+<!-- RIGHT — record / save / load / blynk -->
+<div id="controlBar" class="panel">
+  <button id="recordBtn" style="background:#22c55e;">Record</button>
+  <button id="saveBtn"   style="background:#1f6cff;">Save</button>
+  <label style="cursor:pointer; background:#334155; padding:6px 10px; border-radius:5px; font-size:12px; font-weight:600;">
+    Load <input id="loadInput" type="file" accept=".arm,.txt" style="display:none;">
   </label>
 
-    <div id="blynkStatus" style="
-    display:flex;
-    align-items:center;
-    gap:6px;
-    margin-left:8px;
-    padding:4px 8px;
-    background:rgba(15,23,42,0.9);
-    border-radius:999px;
-    font-size:12px;
-  ">
-    <span id="blynkDot" style="
-      width:8px;
-      height:8px;
-      border-radius:50%;
-      background:#64748b; /* default: grey (unknown) */
-      box-shadow:0 0 6px rgba(15,118,110,0.0);
-      display:inline-block;
-    "></span>
+  <div id="blynkStatus">
+    <span id="blynkDot"></span>
     <span id="blynkText">Checking…</span>
+    <span id="blynkHz" style="color:rgba(100,200,255,0.5); font-size:9px;">— Hz</span>
   </div>
-
 </div>
 
+<!-- Hz readout -->
+<div id="hzDisplay">SIM 60fps · BLYNK 1Hz</div>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-
 <script>
+'use strict';
 
-// ========================================
-// BLYNK CONFIGURATION
-// ========================================
-const BLYNK_AUTH_TOKEN = "sR5ovizT06Xl6m2ni63YQu45PCaV8-tL"; // your device token
-const BLYNK_SERVER     = "https://blynk.cloud";
-const BLYNK_UPDATE_INTERVAL      = 500;   // send angles every 500 ms
-const BLYNK_STATUS_CHECK_INTERVAL = 3000; // check online status every 3 s
+// ════════════════════════════════════════════════
+// BLYNK CONFIG
+// ════════════════════════════════════════════════
+const BLYNK_AUTH_TOKEN           = "54hl-vgooPEeF6NUHLhdeM9rUtQ5dWvK";
+const BLYNK_SERVER               = "https://blynk.cloud";
+const BLYNK_INTERVAL_MS          = 1000;   // 1 Hz — Blynk External API limit
+const BLYNK_STATUS_CHECK_MS      = 5000;
 
 let blynkUpdateTimer  = null;
 let blynkStatusTimer  = null;
+let blynkSending      = false;   // prevent overlapping requests
+let blynkLastOk       = false;
 
-// angle update (as before)
-function updateBlynkVirtualPins() {
-  const baseAngle     = Math.round(state.base);
-  const shoulderAngle = Math.round(state.shoulder);
-  const elbowAngle    = Math.round(state.elbow);
-  const clawValue     = Math.round(state.claw);
+async function updateBlynkVirtualPins() {
+  if (blynkSending) return;   // skip if previous request still in-flight
+  blynkSending = true;
 
-  const url =
-    `${BLYNK_SERVER}/external/api/batch/update` +
-    `?token=${BLYNK_AUTH_TOKEN}` +
-    `&V1=${baseAngle}` +
-    `&V2=${shoulderAngle}` +
-    `&V3=${elbowAngle}` +
-    `&V4=${clawValue}`;
-
-  fetch(url).catch(err => console.error("Blynk update failed:", err));
-}
-
-function startBlynkUpdatesForever() {
-  if (blynkUpdateTimer) clearInterval(blynkUpdateTimer);
-  blynkUpdateTimer = setInterval(updateBlynkVirtualPins, BLYNK_UPDATE_INTERVAL);
-}
-
-// ========================================
-// BLYNK ONLINE STATUS INDICATOR
-// ========================================
-// uses: GET /external/api/isHardwareConnected?token=... (returns "true"/"false")[web:15]
-function updateBlynkConnectionStatus() {
   const dotEl  = document.getElementById("blynkDot");
   const textEl = document.getElementById("blynkText");
-  if (!dotEl || !textEl) return;
+  const hzEl   = document.getElementById("blynkHz");
 
-  const url = `${BLYNK_SERVER}/external/api/isHardwareConnected?token=${BLYNK_AUTH_TOKEN}`;
+  const pins = [
+    { pin: "V1", val: Math.round(state.base) },
+    { pin: "V2", val: Math.round(state.shoulder) },
+    { pin: "V3", val: Math.round(state.elbow) },
+    { pin: "V4", val: Math.round(state.wrist) },
+    { pin: "V5", val: Math.round(state.claw) }
+  ];
 
-  fetch(url)
-    .then(res => res.text())
-    .then(txt => {
-      const online = (txt.trim().toLowerCase() === "true");
-      if (online) {
-        dotEl.style.background = "#22c55e"; // greenish-blue
-        dotEl.style.boxShadow  = "0 0 8px rgba(56,189,248,0.9)";
-        textEl.textContent     = "Connected";
-      } else {
-        dotEl.style.background = "#64748b"; // grey
-        dotEl.style.boxShadow  = "none";
-        textEl.textContent     = "Offline";
-      }
-    })
-    .catch(err => {
-      console.error("Blynk status check failed:", err);
-      dotEl.style.background = "#f97316"; // orange error
-      dotEl.style.boxShadow  = "none";
-      textEl.textContent     = "Error";
-    });
+  try {
+    // Send each pin individually in parallel (batch API not supported on free plan)
+    const results = await Promise.all(pins.map(({ pin, val }) =>
+      fetch(`${BLYNK_SERVER}/external/api/update?token=${BLYNK_AUTH_TOKEN}&${pin}=${val}`)
+        .then(r => ({ pin, status: r.status, ok: r.ok }))
+        .catch(e => ({ pin, status: 0, ok: false }))
+    ));
+
+    const allOk = results.every(r => r.ok);
+    const anyFail = results.find(r => !r.ok);
+
+    if (allOk) {
+      blynkLastOk = true;
+      if (dotEl)  { dotEl.style.background = "#22c55e"; dotEl.style.boxShadow = "0 0 8px rgba(34,197,94,0.8)"; }
+      if (textEl) textEl.textContent = "Sending ✓";
+      if (hzEl)   hzEl.textContent   = "1 Hz";
+    } else {
+      blynkLastOk = false;
+      if (dotEl)  { dotEl.style.background = "#f97316"; dotEl.style.boxShadow = "none"; }
+      if (textEl) textEl.textContent = `Err ${anyFail.pin} ${anyFail.status}`;
+      console.warn("Blynk pin update failed:", results);
+    }
+  } catch (e) {
+    blynkLastOk = false;
+    if (dotEl)  { dotEl.style.background = "#f97316"; dotEl.style.boxShadow = "none"; }
+    if (textEl) textEl.textContent = "Net Error";
+    console.warn("Blynk fetch failed:", e);
+  } finally {
+    blynkSending = false;
+  }
 }
 
-function startBlynkStatusCheck() {
+function startBlynkUpdates() {
+  if (blynkUpdateTimer) clearInterval(blynkUpdateTimer);
+  updateBlynkVirtualPins();   // fire immediately on load
+  blynkUpdateTimer = setInterval(updateBlynkVirtualPins, BLYNK_INTERVAL_MS);
+}
+
+function updateBlynkStatus() {
+  // Status check is now combined into the update function itself.
+  // This is a no-op kept so startBlynkStatus() call below still works.
+}
+
+function startBlynkStatus() {
   if (blynkStatusTimer) clearInterval(blynkStatusTimer);
-  updateBlynkConnectionStatus(); // initial
-  blynkStatusTimer = setInterval(updateBlynkConnectionStatus, BLYNK_STATUS_CHECK_INTERVAL);
+  // Status is reflected live via updateBlynkVirtualPins — no separate poll needed.
 }
 
+// ════════════════════════════════════════════════
+// THREE.JS SCENE
+// ════════════════════════════════════════════════
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x060c15);
+scene.fog = new THREE.FogExp2(0x060c15, 0.035);
 
-// -------- SCENE --------
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101820);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(12, 12, 18);
+camera.lookAt(0, 5, 0);
 
-// -------- CAMERA --------
-const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(10,10,15);
-camera.lookAt(0,4,0);
-
-// -------- RENDERER --------
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// -------- LIGHTS --------
-scene.add(new THREE.AmbientLight(0xffffff,0.7));
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(10,20,10);
-scene.add(light);
+// Lights
+scene.add(new THREE.AmbientLight(0xc8d8ff, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.position.set(10, 20, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+scene.add(sun);
+const fill = new THREE.PointLight(0x4488ff, 1.2, 35);
+fill.position.set(-5, 8, -5);
+scene.add(fill);
+const rimLight = new THREE.PointLight(0x00e5ff, 0.6, 20);
+rimLight.position.set(5, 2, -8);
+scene.add(rimLight);
 
-// -------- HELPERS --------
-scene.add(new THREE.GridHelper(20,20));
-scene.add(new THREE.AxesHelper(5));
+// Grid
+const gridHelper = new THREE.GridHelper(24, 24, 0x1a3060, 0x0d1e40);
+scene.add(gridHelper);
+scene.add(new THREE.AxesHelper(3));
 
-// -------- MATERIAL --------
-const mat = new THREE.MeshStandardMaterial({color:0x1f6cff});
+// ════════════════════════════════════════════════
+// MATERIALS
+// ════════════════════════════════════════════════
+const matBlue = new THREE.MeshStandardMaterial({
+  color: 0x2e90ff, metalness: 0.3, roughness: 0.45
+});
+const matJoint = new THREE.MeshStandardMaterial({
+  color: 0x55aaff, metalness: 0.5, roughness: 0.3,
+  emissive: 0x0a2050, emissiveIntensity: 0.4
+});
+const matBase = new THREE.MeshStandardMaterial({
+  color: 0xffffff, metalness: 0.25, roughness: 0.55
+});
+const matClaw = new THREE.MeshStandardMaterial({
+  color: 0x3388ff, metalness: 0.4, roughness: 0.4
+});
+const matGear = new THREE.MeshStandardMaterial({
+  color: 0xdddddd, metalness: 0.9, roughness: 0.2
+});
 
-// -------- ROBOT ARM --------
-const base = new THREE.Group();
-scene.add(base);
+// ════════════════════════════════════════════════
+// ROBOT ARM — 5 DOF
+// ════════════════════════════════════════════════
+// Hierarchy:
+//  scene
+//    └─ baseYawGroup  (rotate Y = base yaw)
+//         └─ pedestalMesh
+//         └─ shoulderPivot  (rotate Z = shoulder pitch)
+//              └─ upperArmMesh
+//              └─ elbowPivot  (rotate Z = elbow)
+//                   └─ foreArmMesh
+//                   └─ wristPivot  (rotate Z = wrist pitch)
+//                        └─ wristMesh
+//                        └─ clawGroup  (finger spread)
 
-const baseMesh = new THREE.Mesh(
-  new THREE.CylinderGeometry(2,2,1.5,32), mat
-);
-base.add(baseMesh);
+function makeCylMesh(rt, rb, h, segs, mat) {
+  const g = new THREE.CylinderGeometry(rt, rb, h, segs);
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function makeBoxMesh(w, h, d, mat) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function makeSphere(r, segs, mat) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, segs, segs), mat);
+  m.castShadow = true;
+  return m;
+}
 
-// shoulder
-const shoulder = new THREE.Group();
-shoulder.position.set(0.0, 1, 0); 
-base.add(shoulder);
+// ── Base platform ──
+const baseYawGroup = new THREE.Group();
+scene.add(baseYawGroup);
 
-const sMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(1.5,5,1.5), mat
-);
-sMesh.position.y = 2.5;
-shoulder.add(sMesh);
+const platformBase = makeCylMesh(2.2, 2.6, 0.6, 32, matBase);
+platformBase.position.y = 0.3;
+baseYawGroup.add(platformBase);
 
-// elbow
-const elbow = new THREE.Group();
-elbow.position.y = 5;
-shoulder.add(elbow);
+const platformTop = makeCylMesh(2.0, 2.2, 1.2, 32, matBlue);
+platformTop.position.y = 1.2;
+baseYawGroup.add(platformTop);
 
-const eMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(1.2,5,1.2), mat
-);
-eMesh.position.y = 2.5;
-elbow.add(eMesh);
+// base joint ball
+const baseJoint = makeSphere(1.1, 20, matJoint);
+baseJoint.position.y = 1.8;
+baseYawGroup.add(baseJoint);
 
-// wrist base (no main rotation now)
-const wrist = new THREE.Group();
-wrist.position.y = 5;
-elbow.add(wrist);
+// ── Shoulder ──
+const shoulderPivot = new THREE.Group();
+shoulderPivot.position.y = 1.8;
+baseYawGroup.add(shoulderPivot);
 
-const wBaseMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(1,1,1), mat
-);
-wBaseMesh.position.y = 0.5;
-wrist.add(wBaseMesh);
+const shoulderJointRing = makeCylMesh(1.0, 1.0, 0.5, 24, matJoint);
+shoulderJointRing.rotation.z = Math.PI / 2;
+shoulderPivot.add(shoulderJointRing);
 
-// -------- CLAW --------
+// upper arm
+const upperArmGroup = new THREE.Group();
+shoulderPivot.add(upperArmGroup);
+
+const upperArm = makeBoxMesh(1.3, 5.5, 1.3, matBlue);
+upperArm.position.y = 2.75;
+upperArmGroup.add(upperArm);
+
+// elbow joint visual
+const elbowBall = makeSphere(0.85, 20, matJoint);
+elbowBall.position.y = 5.5;
+upperArmGroup.add(elbowBall);
+
+// ── Elbow ──
+const elbowPivot = new THREE.Group();
+elbowPivot.position.y = 5.5;
+shoulderPivot.add(elbowPivot);
+
+const elbowRing = makeCylMesh(0.85, 0.85, 0.45, 24, matJoint);
+elbowRing.rotation.z = Math.PI / 2;
+elbowPivot.add(elbowRing);
+
+const foreArm = makeBoxMesh(1.1, 4.8, 1.1, matBlue);
+foreArm.position.y = 2.4;
+elbowPivot.add(foreArm);
+
+const wristBall = makeSphere(0.7, 20, matJoint);
+wristBall.position.y = 4.8;
+elbowPivot.add(wristBall);
+
+// ── Wrist ──
+const wristPivot = new THREE.Group();
+wristPivot.position.y = 4.8;
+elbowPivot.add(wristPivot);
+
+const wristBody = makeBoxMesh(0.9, 1.2, 0.9, matBlue);
+wristBody.position.y = 0.6;
+wristPivot.add(wristBody);
+
+// gear disc
+const gearDisc = makeCylMesh(0.55, 0.55, 0.2, 16, matGear);
+gearDisc.rotation.z = Math.PI / 2;
+gearDisc.position.y = 1.2;
+wristPivot.add(gearDisc);
+
+// ── Claw / end-effector — 2-jaw parallel gripper ──
 const clawGroup = new THREE.Group();
-clawGroup.position.y = 1;
-clawGroup.rotation.y = Math.PI / 2;
-wrist.add(clawGroup);
+clawGroup.position.y = 1.3;
+wristPivot.add(clawGroup);
 
-const fingerMat = new THREE.MeshStandardMaterial({color:0xffaa00});
-const fingerBaseGeom = new THREE.BoxGeometry(0.2, 0.9, 0.3);
-const fingerTipGeom  = new THREE.BoxGeometry(0.18, 0.6, 0.28);
+// Palm block (the mounting body between wrist and jaws)
+const clawBase = makeBoxMesh(1.1, 0.5, 0.55, matClaw);
+clawBase.position.y = 0.25;
+clawGroup.add(clawBase);
 
-// left finger
-const leftFingerPivot = new THREE.Group();
-leftFingerPivot.position.set(-0.3,0,0);
-clawGroup.add(leftFingerPivot);
+// Gear/servo knob on top of palm
+const clawKnob = makeCylMesh(0.28, 0.28, 0.22, 12, matGear);
+clawKnob.position.y = 0.55;
+clawGroup.add(clawKnob);
 
-const leftFingerGroup = new THREE.Group();
-leftFingerGroup.position.y = 0;
-leftFingerPivot.add(leftFingerGroup);
+// LEFT jaw pivot — slides along X axis
+const leftJawPivot = new THREE.Group();
+leftJawPivot.position.set(-0.38, 0.5, 0);
+clawGroup.add(leftJawPivot);
 
-const leftFingerBase = new THREE.Mesh(fingerBaseGeom, fingerMat);
-leftFingerBase.position.y = 0.45;
-leftFingerGroup.add(leftFingerBase);
+// left jaw: base segment (vertical)
+const leftJawBase = makeBoxMesh(0.22, 0.75, 0.3, matClaw);
+leftJawBase.position.y = 0.375;
+leftJawPivot.add(leftJawBase);
 
-const leftFingerTip = new THREE.Mesh(fingerTipGeom, fingerMat);
-leftFingerTip.position.set(0, 0.9, 0);
-leftFingerTip.rotation.z = -Math.PI / 6;
-leftFingerGroup.add(leftFingerTip);
+// left jaw: tip curls inward (rotated box at top)
+const leftJawTip = makeBoxMesh(0.2, 0.48, 0.28, matClaw);
+leftJawTip.position.set(0.1, 0.75 + 0.18, 0);
+leftJawTip.rotation.z = -Math.PI / 5;
+leftJawPivot.add(leftJawTip);
 
-// right finger
-const rightFingerPivot = new THREE.Group();
-rightFingerPivot.position.set(0.3,0,0);
-clawGroup.add(rightFingerPivot);
+// RIGHT jaw pivot
+const rightJawPivot = new THREE.Group();
+rightJawPivot.position.set(0.38, 0.5, 0);
+clawGroup.add(rightJawPivot);
 
-const rightFingerGroup = new THREE.Group();
-rightFingerGroup.position.y = 0;
-rightFingerPivot.add(rightFingerGroup);
+const rightJawBase = makeBoxMesh(0.22, 0.75, 0.3, matClaw);
+rightJawBase.position.y = 0.375;
+rightJawPivot.add(rightJawBase);
 
-const rightFingerBase = new THREE.Mesh(fingerBaseGeom, fingerMat);
-rightFingerBase.position.y = 0.45;
-rightFingerGroup.add(rightFingerBase);
+const rightJawTip = makeBoxMesh(0.2, 0.48, 0.28, matClaw);
+rightJawTip.position.set(-0.1, 0.75 + 0.18, 0);
+rightJawTip.rotation.z = Math.PI / 5;
+rightJawPivot.add(rightJawTip);
 
-const rightFingerTip = new THREE.Mesh(fingerTipGeom, fingerMat);
-rightFingerTip.position.set(0, 0.9, 0);
-rightFingerTip.rotation.z = Math.PI / 6;
-rightFingerGroup.add(rightFingerTip);
-
-// -------- END-EFFECTOR MARKER --------
-const endEffectorMarker = new THREE.Mesh(
-  new THREE.SphereGeometry(0.2, 16, 16),
-  new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.5})
+// ── End-effector marker ──
+const eeMarker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.15, 12, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0xff2020, emissive: 0xff2020, emissiveIntensity: 1.0,
+    transparent: true, opacity: 0.85
+  })
 );
-clawGroup.add(endEffectorMarker);
+clawGroup.add(eeMarker);
 
-// -------- UI --------
-const sliders = [j0,j1,j2,j3];
-const labels = [v0,v1,v2,v3];
-const d2r = d => d*Math.PI/180;
-
-// --- joint state (degrees) ---
-const state = {
-  base: 90,
-  shoulder: 90,
-  elbow: 90,
-  claw: 50
+// ════════════════════════════════════════════════
+// STATE (degrees)
+// ════════════════════════════════════════════════
+const LIMITS = {
+  base:     { min:   0, max: 180 },
+  shoulder: { min:   0, max: 180 },
+  elbow:    { min:   0, max: 180 },
+  wrist:    { min:   0, max: 180 },
+  claw:     { min:   0, max: 100 }
 };
-// start continuous Blynk tasks
-startBlynkUpdatesForever();   // send angles V1–V4 forever
-startBlynkStatusCheck();      // update “Connected” indicator forever
 
-// -------- RECORDING / PLAYBACK STATE --------
-let recordState = "idle"; // "idle" | "recording" | "playing"
-let recordData = [];      // {t, base, shoulder, elbow, claw}
-let recordTimer = null;   // sampling timer
-let playTimer = null;     // playback timer
-let recordStartTime = 0;  // ms
-let recordTotalTime = 0;  // ms
-let playStartTime = 0;    // ms
-let playElapsed = 0;      // ms accumulated when paused
+const state = {
+  base: 211.9, shoulder: 177.4, elbow: 224.3, wrist: 141.4, claw: 100
+};
 
-const SAMPLE_PERIOD = 500;
+const d2r = d => d * Math.PI / 180;
 
-// helper to apply state to 3D
+function clampState() {
+  for (const k of Object.keys(LIMITS)) {
+    state[k] = Math.max(LIMITS[k].min, Math.min(LIMITS[k].max, state[k]));
+  }
+}
+
+// ════════════════════════════════════════════════
+// APPLY STATE → 3-D
+// ════════════════════════════════════════════════
 function applyState() {
-  base.rotation.y = d2r(state.base);
-  shoulder.rotation.z = d2r(state.shoulder - 90);
-  elbow.rotation.z = d2r(state.elbow);
+  clampState();
 
-  const maxSpread = 35;
+  // Base yaw: 135° = centre, full range 0-270
+  baseYawGroup.rotation.y = d2r(state.base - 135);
+
+  // Shoulder: 135° = straight up (neutral), 0 = backward, 270 = forward fold
+  shoulderPivot.rotation.z = d2r(-(state.shoulder - 135));
+
+  // Elbow: 90° = straight, 0-270
+  elbowPivot.rotation.z = d2r(state.elbow - 90);
+
+  // Wrist pitch: 90° = neutral
+  wristPivot.rotation.z = d2r(state.wrist - 90);
+
+  // Claw grip: 0% = closed (jaws together), 100% = open (jaws apart)
+  // Jaws slide outward on X axis — max spread ±0.30 units each side
+  const maxSpread = 0.30;
   const t = state.claw / 100;
-  const angle = maxSpread * t;
-  leftFingerPivot.rotation.z = d2r(+angle);
-  rightFingerPivot.rotation.z = d2r(-angle);
+  leftJawPivot.position.x  = -(0.38 + maxSpread * t);
+  rightJawPivot.position.x =  (0.38 + maxSpread * t);
 }
 
-// Get end-effector world position
-function getEndEffectorPosition() {
-  const worldPos = new THREE.Vector3();
-  endEffectorMarker.getWorldPosition(worldPos);
-  return worldPos;
+// ════════════════════════════════════════════════
+// FORWARD KINEMATICS (for IK seed / display)
+// ════════════════════════════════════════════════
+const L1 = 5.5, L2 = 4.8, L3 = 1.3 + 0.6; // link lengths (approx with claw)
+const BASE_H = 1.8;
+
+function forwardKinematics(base, shoulder, elbow, wrist) {
+  const baseR    = d2r(base - 135);
+  const sR       = d2r(-(shoulder - 135));  // shoulder rotation.z
+  const eR       = d2r(elbow - 90);
+  const wR       = d2r(wrist - 90);
+
+  // In the local shoulder plane (before base yaw)
+  // shoulder rotates the arm backward/forward about Z
+  // elbow bends relative to upper arm
+  const a1 = sR;
+  const a2 = sR + eR;
+  const a3 = a2 + wR;
+
+  // XZ position in shoulder plane (X = horizontal, Y = vertical)
+  const px = L1 * Math.cos(-a1) + L2 * Math.cos(-a2) + L3 * Math.cos(-a3);
+  const py = L1 * Math.sin(-a1) + L2 * Math.sin(-a2) + L3 * Math.sin(-a3);
+
+  // rotate by base yaw
+  const wx = px * Math.sin(baseR);
+  const wz = px * Math.cos(baseR);
+  const wy = py + BASE_H;
+
+  return { x: wx, y: wy, z: wz };
 }
 
-// Update position display
-function updatePositionDisplay() {
-  const pos = getEndEffectorPosition();
-  posX.textContent = pos.x.toFixed(2);
-  posY.textContent = pos.y.toFixed(2);
-  posZ.textContent = pos.z.toFixed(2);
+function getEndEffectorWorldPos() {
+  renderer.render(scene, camera); // ensure matrices up to date
+  const v = new THREE.Vector3();
+  eeMarker.getWorldPosition(v);
+  return v;
 }
 
-// updates labels, sliders, and 3D from state
+// ════════════════════════════════════════════════
+// UI SYNC
+// ════════════════════════════════════════════════
+const sliders = {
+  base: document.getElementById('j0'),
+  shoulder: document.getElementById('j1'),
+  elbow: document.getElementById('j2'),
+  wrist: document.getElementById('j4'),
+  claw: document.getElementById('j3')
+};
+const labels = {
+  base: document.getElementById('v0'),
+  shoulder: document.getElementById('v1'),
+  elbow: document.getElementById('v2'),
+  wrist: document.getElementById('v4'),
+  claw: document.getElementById('v3')
+};
+
 function syncUIAndScene() {
-  sliders[0].value = state.base;
-  sliders[1].value = state.shoulder;
-  sliders[2].value = state.elbow;
-  sliders[3].value = state.claw;
-
-  labels[0].innerText = state.base + "°";
-  labels[1].innerText = state.shoulder + "°";
-  labels[2].innerText = state.elbow + "°";
-  labels[3].innerText = state.claw + "%";
-
+  clampState();
+  for (const k of Object.keys(sliders)) {
+    sliders[k].value = state[k];
+    labels[k].textContent = (k === 'claw') ? state[k].toFixed(0) + '%' : state[k].toFixed(1) + '°';
+  }
   applyState();
+  renderer.render(scene, camera);
   updatePositionDisplay();
+}
+
+function updatePositionDisplay() {
+  const pos = getEndEffectorWorldPos();
+  document.getElementById('posX').textContent = pos.x.toFixed(2);
+  document.getElementById('posY').textContent = pos.y.toFixed(2);
+  document.getElementById('posZ').textContent = pos.z.toFixed(2);
+}
+
+// Slider events
+for (const k of Object.keys(sliders)) {
+  sliders[k].oninput = () => {
+    if (trajActive) abortTrajectory();
+    state[k] = Number(sliders[k].value);
+    syncUIAndScene();
+  };
 }
 
 syncUIAndScene();
 
-// this is only used when we *really* want to kill automation
-function stopAllAutomation() {
-  if (recordTimer) { clearInterval(recordTimer); recordTimer = null; }
-  if (playTimer) { clearInterval(playTimer); playTimer = null; }
-  recordState = "idle";
-  playElapsed = 0;
-  setRecordButton("Record", "#22c55e");
-}
+// ════════════════════════════════════════════════
+// INVERSE KINEMATICS — gradient descent with analytical seed
+// ════════════════════════════════════════════════
+function solveIK(tx, ty, tz) {
+  // Attempt analytical solve first as seed
+  // base yaw = atan2(tx, tz)
+  const baseRad  = Math.atan2(tx, tz);
+  const baseDeg  = baseRad * 180 / Math.PI + 135;
 
-// slider events – do NOT stop recording
-sliders[0].oninput = () => {
-  state.base = Number(sliders[0].value);
-  syncUIAndScene();
-};
-sliders[1].oninput = () => {
-  state.shoulder = Number(sliders[1].value);
-  syncUIAndScene();
-};
-sliders[2].oninput = () => {
-  state.elbow = Math.min(160, Number(sliders[2].value));
-  syncUIAndScene();
-};
-sliders[3].oninput = () => {
-  state.claw = Number(sliders[3].value);
-  syncUIAndScene();
-};
+  // horizontal reach from shoulder
+  const horizDist = Math.sqrt(tx*tx + tz*tz);
+  const vertDist  = ty - BASE_H;
+  const totalDist = Math.sqrt(horizDist*horizDist + vertDist*vertDist);
 
-// -------- ARM GEOMETRY CONSTANTS --------
-const ARM_GEOMETRY = {
-  shoulderHeight: 1,
-  link1Length: 5,
-  link2Length: 6,
-  get totalReach() { return this.link1Length + this.link2Length; }
-};
-
-// -------- FORWARD KINEMATICS --------
-function forwardKinematics(baseAngle, shoulderAngle, elbowAngle) {
-  const d2rLoc = (deg) => deg * Math.PI / 180;
-  const shoulderRad = d2rLoc(shoulderAngle - 90);
-  const elbowRad = d2rLoc(elbowAngle);
-
-  const x1 = ARM_GEOMETRY.link1Length * Math.cos(shoulderRad);
-  const y1 = ARM_GEOMETRY.link1Length * Math.sin(shoulderRad);
-
-  const totalAngle = shoulderRad + elbowRad;
-  const x2 = x1 + ARM_GEOMETRY.link2Length * Math.cos(totalAngle);
-  const y2 = y1 + ARM_GEOMETRY.link2Length * Math.sin(totalAngle);
-
-  const baseRad = d2rLoc(baseAngle);
-  const x = x2 * Math.sin(baseRad);
-  const z = x2 * Math.cos(baseRad);
-  const y = y2 + ARM_GEOMETRY.shoulderHeight;
-
-  return { x, y, z };
-}
-
-// -------- WORKSPACE LIMITS --------
-const workspaceLimits = {
-  get maxReach() { return ARM_GEOMETRY.totalReach; },
-  minReach: 0.5,
-  get maxHeight() { return ARM_GEOMETRY.shoulderHeight + ARM_GEOMETRY.totalReach; },
-  get minHeight() { return ARM_GEOMETRY.shoulderHeight - ARM_GEOMETRY.totalReach; }
-};
-
-function isInWorkspace(x, y, z) {
-  const horizDist = Math.sqrt(x*x + z*z);
-  const yAdjusted = y - ARM_GEOMETRY.shoulderHeight;
-  const dist = Math.sqrt(horizDist*horizDist + yAdjusted*yAdjusted);
-  return dist <= workspaceLimits.maxReach + 0.1 && 
-         dist >= workspaceLimits.minReach &&
-         y <= workspaceLimits.maxHeight + 0.1 &&
-         y >= workspaceLimits.minHeight - 0.1;
-}
-
-// -------- INVERSE KINEMATICS --------
-function inverseKinematics(targetX, targetY, targetZ) {
-  const dist = Math.sqrt(targetX*targetX + (targetY-1)*(targetY-1) + targetZ*targetZ);
-  if (dist > 11.5 || dist < 0.5) {
-    alert(`Target outside workspace! Distance from shoulder: ${dist.toFixed(2)}`);
-    return null;
+  if (totalDist > L1 + L2 + 0.5) {
+    return null; // out of reach
   }
 
-  let bestBase = state.base;
-  let bestShoulder = state.shoulder;
-  let bestElbow = state.elbow;
+  // Cosine rule for elbow
+  const cosE = (totalDist*totalDist - L1*L1 - L2*L2) / (2*L1*L2);
+  const clampedCosE = Math.max(-1, Math.min(1, cosE));
+  const elbowLocal  = Math.acos(clampedCosE); // 0 = extended
 
-  function getError(base, shoulder, elbow) {
-    const oldState = {base: state.base, shoulder: state.shoulder, elbow: state.elbow};
-    state.base = base;
-    state.shoulder = shoulder;
-    state.elbow = elbow;
+  // shoulder angle
+  const alpha = Math.atan2(vertDist, horizDist);
+  const beta  = Math.acos(Math.max(-1, Math.min(1, (L1*L1 + totalDist*totalDist - L2*L2) / (2*L1*totalDist))));
+  const shoulderLocal = alpha + beta; // angle above horizontal
+
+  // Convert to our degree convention
+  let shoulderDeg = -(shoulderLocal * 180 / Math.PI) + 135;
+  let elbowDeg    = elbowLocal * 180 / Math.PI + 90;
+
+  // Clamp to limits
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let best = {
+    base:     clamp(baseDeg,     LIMITS.base.min,     LIMITS.base.max),
+    shoulder: clamp(shoulderDeg, LIMITS.shoulder.min, LIMITS.shoulder.max),
+    elbow:    clamp(elbowDeg,    LIMITS.elbow.min,    LIMITS.elbow.max),
+    wrist:    state.wrist  // preserve current wrist
+  };
+
+  // Gradient descent refinement
+  function getError(b, s, e, w) {
+    const savedBase = state.base, savedShoulder = state.shoulder;
+    const savedElbow = state.elbow, savedWrist = state.wrist;
+    state.base = b; state.shoulder = s; state.elbow = e; state.wrist = w;
     applyState();
-
-    const pos = getEndEffectorPosition();
-
-    state.base = oldState.base;
-    state.shoulder = oldState.shoulder;
-    state.elbow = oldState.elbow;
+    const pos = getEndEffectorWorldPos();
+    state.base = savedBase; state.shoulder = savedShoulder;
+    state.elbow = savedElbow; state.wrist = savedWrist;
     applyState();
-
-    return {
-      error: Math.sqrt(
-        Math.pow(pos.x - targetX, 2) +
-        Math.pow(pos.y - targetY, 2) +
-        Math.pow(pos.z - targetZ, 2)
-      ),
-      pos: pos
-    };
+    return Math.sqrt((pos.x-tx)**2 + (pos.y-ty)**2 + (pos.z-tz)**2);
   }
 
-  let improved = true;
-  let iteration = 0;
-  const maxIterations = 200;
+  let step = 3.0;
+  for (let iter = 0; iter < 300; iter++) {
+    const curErr = getError(best.base, best.shoulder, best.elbow, best.wrist);
+    if (curErr < 0.08) break;
 
-  while (improved && iteration < maxIterations) {
-    improved = false;
-    iteration++;
-
-    const currentError = getError(bestBase, bestShoulder, bestElbow).error;
-    if (currentError < 0.1) break;
-
-    const joints = [
-      {name: 'base', value: bestBase, min: 0, max: 180, step: 2},
-      {name: 'shoulder', value: bestShoulder, min: 0, max: 180, step: 2},
-      {name: 'elbow', value: bestElbow, min: 0, max: 160, step: 2}
-    ];
-
-    for (let joint of joints) {
-      let best = joint.value;
-      let bestErr = currentError;
-
-      for (let delta of [-joint.step, joint.step]) {
-        const newVal = THREE.MathUtils.clamp(joint.value + delta, joint.min, joint.max);
-
-        let testBase = bestBase;
-        let testShoulder = bestShoulder;
-        let testElbow = bestElbow;
-
-        if (joint.name === 'base') testBase = newVal;
-        else if (joint.name === 'shoulder') testShoulder = newVal;
-        else testElbow = newVal;
-
-        const result = getError(testBase, testShoulder, testElbow);
-
-        if (result.error < bestErr) {
-          bestErr = result.error;
-          best = newVal;
+    let improved = false;
+    for (const joint of ['base','shoulder','elbow','wrist']) {
+      const orig = best[joint];
+      for (const dir of [-1, 1]) {
+        const nv = clamp(orig + dir*step, LIMITS[joint].min, LIMITS[joint].max);
+        const tmp = {...best, [joint]: nv};
+        const err = getError(tmp.base, tmp.shoulder, tmp.elbow, tmp.wrist);
+        if (err < curErr - 0.001) {
+          best[joint] = nv;
           improved = true;
+          break;
         }
       }
-
-      if (joint.name === 'base') bestBase = best;
-      else if (joint.name === 'shoulder') bestShoulder = best;
-      else bestElbow = best;
     }
-
-    if (iteration % 20 === 0) {
-      for (let joint of joints) {
-        joint.step = Math.max(0.5, joint.step * 0.7);
-      }
-    }
+    if (!improved) step *= 0.65;
+    if (step < 0.05) break;
   }
 
-  return {
-    base: bestBase,
-    shoulder: bestShoulder,
-    elbow: bestElbow
-  };
+  const finalErr = getError(best.base, best.shoulder, best.elbow, best.wrist);
+  if (finalErr > 0.5) return null;
+
+  return best;
 }
 
-// Move to coordinates function
-function moveToCoordinates() {
-  const targetX = parseFloat(inputX.value);
-  const targetY = parseFloat(inputY.value);
-  const targetZ = parseFloat(inputZ.value);
+// ════════════════════════════════════════════════
+// TRAJECTORY PLANNER — trapezoidal velocity profile
+// ════════════════════════════════════════════════
+//  Phase 1: accelerate  (0 → peak speed)
+//  Phase 2: cruise      (peak speed)
+//  Phase 3: decelerate  (peak speed → 0)
+//
+// All joints are time-synchronised so they arrive together.
 
-  if (isNaN(targetX) || isNaN(targetY) || isNaN(targetZ)) {
-    alert("Please enter valid numbers for all coordinates!");
+const TRAJ_HZ      = 120;    // internal update rate (Hz)
+const TRAJ_DT      = 1000 / TRAJ_HZ;
+const ACCEL_FRAC   = 0.30;  // fraction of total time for accel/decel each
+const MIN_DUR_MS   = 400;   // minimum motion duration
+const SPEED_DEG_S  = 160;   // cruise speed in deg/s for longest joint
+
+let trajActive    = false;
+let trajTimer     = null;
+let trajTarget    = null;
+let trajStart     = null;
+let trajDur       = 0;
+let trajProgress  = 0;
+
+function trapezoidPos(t_norm) {
+  // t_norm ∈ [0,1]; returns position fraction [0,1]
+  const ta = ACCEL_FRAC, td = ACCEL_FRAC;
+  const tc = 1 - ta - td;
+  const vPeak = 1 / (ta/2 + tc + td/2);
+
+  if (t_norm <= ta) {
+    return 0.5 * vPeak / ta * t_norm * t_norm;
+  } else if (t_norm <= ta + tc) {
+    const dt = t_norm - ta;
+    return 0.5 * vPeak * ta + vPeak * dt;
+  } else {
+    const dt = t_norm - ta - tc;
+    const s0 = 0.5 * vPeak * ta + vPeak * tc;
+    return s0 + vPeak * dt - 0.5 * (vPeak / td) * dt * dt;
+  }
+}
+
+function abortTrajectory() {
+  if (trajTimer) { clearInterval(trajTimer); trajTimer = null; }
+  trajActive = false;
+  document.getElementById('trajBar').style.display = 'none';
+  document.getElementById('abortBtn').style.display = 'none';
+  document.getElementById('trajStatus').textContent = '⚠ Aborted';
+  document.getElementById('trajFill').style.width = '0%';
+}
+
+function startIKMove() {
+  const tx = parseFloat(document.getElementById('inputX').value);
+  const ty = parseFloat(document.getElementById('inputY').value);
+  const tz = parseFloat(document.getElementById('inputZ').value);
+
+  if (isNaN(tx) || isNaN(ty) || isNaN(tz)) {
+    document.getElementById('trajStatus').textContent = '✖ Invalid coordinates';
     return;
   }
 
-  stopAllAutomation(); // here we do want to cancel record/play
+  abortTrajectory();
 
-  const result = inverseKinematics(targetX, targetY, targetZ);
+  document.getElementById('trajStatus').textContent = '⟳ Solving IK…';
 
-  if (result) {
-    state.base = result.base;
-    state.shoulder = result.shoulder;
-    state.elbow = result.elbow;
-    syncUIAndScene();
+  // Solve IK
+  const result = solveIK(tx, ty, tz);
+
+  if (!result) {
+    document.getElementById('trajStatus').textContent = '✖ Target unreachable!';
+    return;
   }
+
+  // Plan trajectory
+  const joints = ['base','shoulder','elbow','wrist'];
+  const deltas = joints.map(j => Math.abs(result[j] - state[j]));
+  const maxDelta = Math.max(...deltas, 1);
+
+  // Duration based on speed of the slowest joint
+  let dur = (maxDelta / SPEED_DEG_S) * 1000;
+  dur = Math.max(dur, MIN_DUR_MS);
+
+  const start = { ...state };
+  trajTarget = result;
+  trajDur    = dur;
+  trajStart  = null;
+  trajActive = true;
+  trajProgress = 0;
+
+  document.getElementById('trajBar').style.display = 'block';
+  document.getElementById('abortBtn').style.display = 'block';
+  document.getElementById('trajStatus').textContent = `▶ Executing… (${(dur/1000).toFixed(1)}s)`;
+
+  if (trajTimer) clearInterval(trajTimer);
+
+  trajTimer = setInterval(() => {
+    if (!trajStart) trajStart = performance.now();
+    const elapsed = performance.now() - trajStart;
+    const tNorm   = Math.min(elapsed / dur, 1.0);
+    const sFrac   = Math.min(trapezoidPos(tNorm), 1.0);
+
+    for (const j of joints) {
+      state[j] = start[j] + (result[j] - start[j]) * sFrac;
+    }
+
+    syncUIAndScene();
+    trajProgress = tNorm;
+
+    document.getElementById('trajFill').style.width = (tNorm * 100).toFixed(1) + '%';
+
+    if (tNorm >= 1.0) {
+      clearInterval(trajTimer);
+      trajTimer = null;
+      trajActive = false;
+      document.getElementById('trajBar').style.display = 'none';
+      document.getElementById('abortBtn').style.display = 'none';
+      document.getElementById('trajStatus').textContent = '✔ Reached target';
+    }
+  }, TRAJ_DT);
 }
 
-// -------- RECORD / SAVE / LOAD UI HOOKUP --------
-const recordBtn = document.getElementById("recordBtn");
-const saveBtn   = document.getElementById("saveBtn");
-const loadInput = document.getElementById("loadInput");
+// ════════════════════════════════════════════════
+// RECORDING / PLAYBACK
+// ════════════════════════════════════════════════
+const SAMPLE_PERIOD = 100;
+let recordState   = "idle";
+let recordData    = [];
+let recordTimer2  = null;
+let playTimer2    = null;
+let recordStartTime = 0, recordTotalTime = 0;
+let playStartTime = 0, playElapsed = 0;
 
-recordBtn.addEventListener("click", () => {
+const recordBtn = document.getElementById('recordBtn');
+const saveBtn   = document.getElementById('saveBtn');
+const loadInput = document.getElementById('loadInput');
+
+function setRecordButton(label, bg) {
+  recordBtn.textContent = label;
+  recordBtn.style.background = bg;
+}
+
+function sampleState(tMs) {
+  recordData.push({ t: tMs, base: state.base, shoulder: state.shoulder,
+    elbow: state.elbow, wrist: state.wrist, claw: state.claw });
+}
+
+function startRecording() {
+  abortTrajectory();
+  stopPlayInternal();
+  recordState = "recording";
+  recordData = [];
+  recordStartTime = performance.now();
+  sampleState(0);
+  setRecordButton("Stop", "#ef4444");
+  if (recordTimer2) clearInterval(recordTimer2);
+  recordTimer2 = setInterval(() => {
+    sampleState(performance.now() - recordStartTime);
+  }, SAMPLE_PERIOD);
+}
+
+function stopRecording() {
+  if (recordTimer2) { clearInterval(recordTimer2); recordTimer2 = null; }
+  if (!recordData.length) { recordState = "idle"; setRecordButton("Record", "#22c55e"); return; }
+  recordTotalTime = recordData[recordData.length-1].t;
+  recordState = "idle"; playElapsed = 0;
+  setRecordButton("Play", "#1f6cff");
+}
+
+function startPlayback() {
+  if (!recordData.length) { alert("Nothing recorded."); return; }
+  recordData.sort((a,b) => a.t - b.t);
+  recordTotalTime = recordData[recordData.length-1].t;
+  if (recordTotalTime <= 0) { alert("Recording too short."); return; }
+  recordState = "playing";
+  setRecordButton("Pause", "#f97316");
+  playStartTime = performance.now() - playElapsed;
+  if (playTimer2) clearInterval(playTimer2);
+  playTimer2 = setInterval(() => {
+    const elapsed = (performance.now() - playStartTime) % recordTotalTime;
+    playElapsed = elapsed;
+    let i = 0;
+    while (i < recordData.length-1 && recordData[i+1].t < elapsed) i++;
+    const k1 = recordData[i];
+    const k2 = recordData[Math.min(i+1, recordData.length-1)];
+    const span = Math.max(1, k2.t - k1.t);
+    const t = Math.min((elapsed - k1.t) / span, 1);
+    const lerp = (a,b) => a + (b-a)*t;
+    state.base     = lerp(k1.base, k2.base);
+    state.shoulder = lerp(k1.shoulder, k2.shoulder);
+    state.elbow    = lerp(k1.elbow, k2.elbow);
+    state.wrist    = lerp(k1.wrist, k2.wrist);
+    state.claw     = lerp(k1.claw, k2.claw);
+    syncUIAndScene();
+  }, 20);
+}
+
+function pausePlayback() {
+  if (playTimer2) { clearInterval(playTimer2); playTimer2 = null; }
+  recordState = "idle";
+  setRecordButton("Play", "#1f6cff");
+}
+
+function stopPlayInternal() {
+  if (playTimer2) { clearInterval(playTimer2); playTimer2 = null; }
+  playElapsed = 0;
+}
+
+recordBtn.addEventListener('click', () => {
   if (recordState === "idle") {
-    if (recordBtn.textContent === "Record") {
-      startRecording();
-    } else if (recordBtn.textContent === "Play") {
-      startPlaybackLoop();
-    } else {
-      startRecording();
-    }
+    if (recordBtn.textContent === "Record") startRecording();
+    else if (recordBtn.textContent === "Play") startPlayback();
+    else startRecording();
   } else if (recordState === "recording") {
-    stopRecordingAndEnablePlay();
+    stopRecording();
   } else if (recordState === "playing") {
     pausePlayback();
   }
 });
 
-// save
-saveBtn.addEventListener("click", () => {
-  if (!recordData || recordData.length === 0) {
-    alert("No recording to save. Please record something first.");
-    return;
-  }
-  saveRecordingToFile();
+saveBtn.addEventListener('click', () => {
+  if (!recordData.length) { alert("Nothing to save."); return; }
+  const payload = {
+    meta: { type: "robotArmRecording", version: 2, dof: 5, samplePeriodMs: SAMPLE_PERIOD },
+    data: recordData
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'text/plain'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'arm5dof.arm'; document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
 });
 
-// load
-loadInput.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  loadRecordingFromFile(file);
+loadInput.addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const payload = JSON.parse(ev.target.result);
+      if (!payload.meta || !Array.isArray(payload.data)) { alert("Invalid file."); return; }
+      abortTrajectory(); stopPlayInternal();
+      recordData = payload.data.map(k => ({
+        t: +k.t||0, base:+k.base||135, shoulder:+k.shoulder||135,
+        elbow:+k.elbow||90, wrist:+k.wrist||90, claw:+k.claw||50
+      }));
+      recordData.sort((a,b)=>a.t-b.t);
+      recordTotalTime = recordData[recordData.length-1].t;
+      recordState = "idle"; playElapsed = 0;
+      setRecordButton("Play", "#1f6cff");
+      const k0 = recordData[0];
+      state.base = k0.base; state.shoulder = k0.shoulder;
+      state.elbow = k0.elbow; state.wrist = k0.wrist; state.claw = k0.claw;
+      syncUIAndScene();
+    } catch { alert("Failed to load."); }
+  };
+  reader.readAsText(file);
   e.target.value = "";
 });
 
-// -------- RECORDING / PLAYBACK FUNCTIONS --------
-function setRecordButton(label, bgColor) {
-  recordBtn.textContent = label;
-  recordBtn.style.background = bgColor;
-}
-
-function startRecording() {
-  stopPlaybackInternal();
-
-  recordState = "recording";
-  recordData = [];
-  recordStartTime = performance.now();
-  recordTotalTime = 0;
-  playElapsed = 0;
-
-  // first sample at t = 0
-  sampleCurrentState(0);
-  setRecordButton("Stop", "#ef4444");
-
-  if (recordTimer) clearInterval(recordTimer);
-  recordTimer = setInterval(() => {
-    const t = performance.now() - recordStartTime;
-    sampleCurrentState(t);
-  }, SAMPLE_PERIOD);
-}
-
-function sampleCurrentState(tMs) {
-  recordData.push({
-    t: tMs,
-    base: state.base,
-    shoulder: state.shoulder,
-    elbow: state.elbow,
-    claw: state.claw
-  });
-}
-
-function stopRecordingAndEnablePlay() {
-  if (recordTimer) {
-    clearInterval(recordTimer);
-    recordTimer = null;
-  }
-  if (recordData.length === 0) {
-    recordState = "idle";
-    setRecordButton("Record", "#22c55e");
-    return;
-  }
-
-  const last = recordData[recordData.length - 1];
-  recordTotalTime = last.t;
-  recordState = "idle";
-  playElapsed = 0;
-  setRecordButton("Play", "#1f6cff");
-}
-
-function startPlaybackLoop() {
-  if (!recordData || recordData.length === 0) {
-    alert("No recording to play.");
-    return;
-  }
-
-  recordData.sort((a, b) => a.t - b.t);
-  recordTotalTime = recordData[recordData.length - 1].t || 0;
-
-  if (recordTotalTime <= 0) {
-    alert("Recording is too short.");
-    return;
-  }
-
-  recordState = "playing";
-  setRecordButton("Pause", "#f97316");
-
-  // continue from where we left off (playElapsed), loop when exceeding total time
-  playStartTime = performance.now() - playElapsed;
-
-  if (playTimer) clearInterval(playTimer);
-
-  playTimer = setInterval(() => {
-    const now = performance.now();
-    const elapsed = (now - playStartTime) % recordTotalTime;
-    playElapsed = elapsed;
-
-    // find keyframes around current time
-    let i = 0;
-    while (i < recordData.length - 1 && recordData[i + 1].t < elapsed) {
-      i++;
-    }
-
-    const k1 = recordData[i];
-    const k2 = recordData[Math.min(i + 1, recordData.length - 1)];
-    const span = Math.max(1, k2.t - k1.t);
-    const t = THREE.MathUtils.clamp((elapsed - k1.t) / span, 0, 1);
-
-    state.base     = k1.base     + (k2.base     - k1.base)     * t;
-    state.shoulder = k1.shoulder + (k2.shoulder - k1.shoulder) * t;
-    state.elbow    = k1.elbow    + (k2.elbow    - k1.elbow)    * t;
-    state.claw     = k1.claw     + (k2.claw     - k1.claw)     * t;
-
-    syncUIAndScene();
-  }, 30);
-}
-
-function pausePlayback() {
-  if (playTimer) {
-    clearInterval(playTimer);
-    playTimer = null;
-  }
-  recordState = "idle";
-  setRecordButton("Play", "#1f6cff");
-}
-
-function stopPlaybackInternal() {
-  if (playTimer) {
-    clearInterval(playTimer);
-    playTimer = null;
-  }
-  playElapsed = 0;
-}
-
-// -------- SAVE / LOAD FUNCTIONS --------
-function saveRecordingToFile() {
-  const payload = {
-    meta: {
-      type: "robotArmRecording",
-      version: 1,
-      samplePeriodMs: SAMPLE_PERIOD
-    },
-    data: recordData
-  };
-
-  const text = JSON.stringify(payload, null, 2);
-  const blob = new Blob([text], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "record.arm";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function loadRecordingFromFile(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const text = e.target.result;
-      const payload = JSON.parse(text);
-
-      if (!payload || payload.meta?.type !== "robotArmRecording" || !Array.isArray(payload.data)) {
-        alert("Invalid .arm file format.");
-        return;
-      }
-
-      stopAllAutomation();
-
-      recordData = payload.data.map((k) => ({
-        t: Number(k.t) || 0,
-        base: Number(k.base) || 0,
-        shoulder: Number(k.shoulder) || 0,
-        elbow: Number(k.elbow) || 0,
-        claw: Number(k.claw) || 0
-      }));
-
-      if (recordData.length === 0) {
-        alert("Loaded recording is empty.");
-        return;
-      }
-
-      recordData.sort((a, b) => a.t - b.t);
-      recordTotalTime = recordData[recordData.length - 1].t || 0;
-      recordState = "idle";
-      playElapsed = 0;
-      setRecordButton("Play", "#1f6cff");
-
-      const k0 = recordData[0];
-      state.base = k0.base;
-      state.shoulder = k0.shoulder;
-      state.elbow = k0.elbow;
-      state.claw = k0.claw;
-      syncUIAndScene();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to load recording.");
-    }
-  };
-  reader.readAsText(file);
-}
-
-// -------- INTERACTIVE CLICK & DRAG ROTATION --------
+// ════════════════════════════════════════════════
+// DRAG ROTATION ON 3D MESHES
+// ════════════════════════════════════════════════
 const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+const mouse     = new THREE.Vector2();
+let dragging = false, dragTarget = null, dragStartX = 0, dragStartY = 0, dragStartVal = 0;
 
-let dragging = false;
-let dragTarget = null;
-let dragStartY = 0;
-let dragStartX = 0;
-let dragStartValue = 0;
+const pickables = [
+  { mesh: platformTop,   type: 'base' },
+  { mesh: platformBase,  type: 'base' },
+  { mesh: baseJoint,     type: 'base' },
+  { mesh: upperArm,      type: 'shoulder' },
+  { mesh: foreArm,       type: 'elbow' },
+  { mesh: wristBody,     type: 'wrist' },
+  { mesh: clawBase,      type: 'claw' },
+  { mesh: leftJawBase,   type: 'claw' },
+  { mesh: rightJawBase,  type: 'claw' }
+];
 
-const pickables = [];
-pickables.push({mesh: baseMesh, type: "base"});
-pickables.push({mesh: sMesh, type: "shoulder"});
-pickables.push({mesh: eMesh, type: "elbow"});
-pickables.push({mesh: wBaseMesh, type: "claw"});
-pickables.push({mesh: leftFingerBase, type: "claw"});
-pickables.push({mesh: rightFingerBase, type: "claw"});
-
-function onPointerDown(event) {
+renderer.domElement.addEventListener('pointerdown', e => {
   const rect = renderer.domElement.getBoundingClientRect();
-  const x = ( (event.clientX - rect.left) / rect.width ) * 2 - 1;
-  const y = - ( (event.clientY - rect.top) / rect.height ) * 2 + 1;
-
-  mouse.set(x, y);
+  mouse.set(
+    ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+    -((e.clientY - rect.top)  / rect.height) * 2 + 1
+  );
   raycaster.setFromCamera(mouse, camera);
-
-  const objects = pickables.map(p => p.mesh);
-  const intersects = raycaster.intersectObjects(objects, false);
-  if (intersects.length > 0) {
-    const hitMesh = intersects[0].object;
-    const info = pickables.find(p => p.mesh === hitMesh);
+  const hits = raycaster.intersectObjects(pickables.map(p=>p.mesh), false);
+  if (hits.length) {
+    const info = pickables.find(p => p.mesh === hits[0].object);
     if (info) {
-      dragging = true;
-      dragTarget = info.type;
-      dragStartY = event.clientY;
-      dragStartX = event.clientX;
-      if (dragTarget === "base") dragStartValue = state.base;
-      else if (dragTarget === "shoulder") dragStartValue = state.shoulder;
-      else if (dragTarget === "elbow") dragStartValue = state.elbow;
-      else if (dragTarget === "claw") dragStartValue = state.claw;
+      dragging = true; dragTarget = info.type;
+      dragStartX = e.clientX; dragStartY = e.clientY;
+      dragStartVal = state[dragTarget];
+      if (trajActive) abortTrajectory();
     }
   }
-}
+});
 
-function onPointerMove(event) {
-  if (!dragging || !dragTarget) return;
-
-  const deltaY = event.clientY - dragStartY;
-  const deltaX = event.clientX - dragStartX;
-
-  const factorBase  = 0.3;
-  const factorJoint = 0.35;
-
-  if (dragTarget === "base") {
-    const delta = deltaX * factorBase;
-    state.base = THREE.MathUtils.clamp(dragStartValue + delta, 0, 180);
-
-  } else if (dragTarget === "shoulder") {
-    const delta = -deltaY * factorJoint;
-    state.shoulder = THREE.MathUtils.clamp(dragStartValue + delta, 0, 180);
-
-  } else if (dragTarget === "elbow") {
-    const delta = (+deltaY) * factorJoint;
-    state.elbow = THREE.MathUtils.clamp(dragStartValue + delta, 0, 160);
-
-  } else if (dragTarget === "claw") {
-    const delta = -deltaY * factorJoint;
-    state.claw = THREE.MathUtils.clamp(dragStartValue + delta, 0, 100);
-  }
-
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  const f = 0.4;
+  if (dragTarget === 'base')     state.base     = dragStartVal + dx * f;
+  else if (dragTarget === 'shoulder') state.shoulder = dragStartVal - dy * f;
+  else if (dragTarget === 'elbow')    state.elbow    = dragStartVal + dy * f;
+  else if (dragTarget === 'wrist')    state.wrist    = dragStartVal + dy * f;
+  else if (dragTarget === 'claw')     state.claw     = dragStartVal - dy * f;
   syncUIAndScene();
-}
+});
 
-function onPointerUp() {
-  dragging = false;
-  dragTarget = null;
-}
+window.addEventListener('pointerup',    () => { dragging = false; dragTarget = null; });
+window.addEventListener('pointerleave', () => { dragging = false; dragTarget = null; });
 
-renderer.domElement.addEventListener('pointerdown', onPointerDown);
-window.addEventListener('pointermove', onPointerMove);
-window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointerleave', onPointerUp);
+// ════════════════════════════════════════════════
+// ORBIT CAMERA (right-click drag)
+// ════════════════════════════════════════════════
+let orbiting = false, orbitStart = {x:0,y:0};
+let orbitTheta = Math.atan2(12,18), orbitPhi = Math.atan2(12, Math.sqrt(12*12+18*18));
+let orbitDist = Math.sqrt(12*12+12*12+18*18);
 
-// -------- LOOP --------
-function animate(){
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.button === 2 || e.button === 1) {
+    orbiting = true; orbitStart = {x: e.clientX, y: e.clientY};
+  }
+});
+window.addEventListener('mousemove', e => {
+  if (!orbiting) return;
+  orbitTheta -= (e.clientX - orbitStart.x) * 0.005;
+  orbitPhi   = Math.max(0.1, Math.min(Math.PI/2 - 0.05, orbitPhi - (e.clientY - orbitStart.y) * 0.005));
+  orbitStart = {x: e.clientX, y: e.clientY};
+  camera.position.set(
+    orbitDist * Math.sin(orbitTheta) * Math.cos(orbitPhi),
+    orbitDist * Math.sin(orbitPhi),
+    orbitDist * Math.cos(orbitTheta) * Math.cos(orbitPhi)
+  );
+  camera.lookAt(0, 5, 0);
+});
+window.addEventListener('mouseup', () => { orbiting = false; });
+renderer.domElement.addEventListener('wheel', e => {
+  orbitDist = Math.max(5, Math.min(50, orbitDist + e.deltaY * 0.02));
+  camera.position.setLength(orbitDist);
+  camera.lookAt(0, 5, 0);
+});
+
+// ════════════════════════════════════════════════
+// RENDER LOOP
+// ════════════════════════════════════════════════
+function animate() {
   requestAnimationFrame(animate);
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
+  if (!trajActive && !dragging) updatePositionDisplay();
 }
 animate();
 
-// -------- RESIZE --------
-onresize=()=>{
-  camera.aspect=innerWidth/innerHeight;
+// ════════════════════════════════════════════════
+// RESIZE
+// ════════════════════════════════════════════════
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-};
-</script>
+  renderer.setSize(innerWidth, innerHeight);
+});
 
+// ════════════════════════════════════════════════
+// START BLYNK
+// ════════════════════════════════════════════════
+startBlynkUpdates();
+startBlynkStatus();
+
+</script>
 </body>
 </html>
